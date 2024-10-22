@@ -1,3 +1,4 @@
+
 const blogpostMarkdown = `# control
 
 *humans should focus on bigger problems*
@@ -77,16 +78,89 @@ function runStream() {
     }, 20);
 }
 
-// dont be afraid of using globals for state
+// State variables
+let currentState: 'normal' | 'inlineCode' | 'codeBlock' = 'normal';
+let buffer: string = '';
+let codeBlockCount: number = 0;
 
-/*YOUR CODE HERE
-this does token streaming with no styling right now
-your job is to write the parsing logic to make the styling work
- */
+function createSpan(text: string, className: string = ''): HTMLSpanElement {
+    const span = document.createElement('span');
+    span.textContent = text;
+    if (className) {
+        span.className = className;
+    }
+    return span;
+}
+
+function flushBuffer(className: string = '') {
+    if (buffer && currentContainer) {
+        currentContainer.appendChild(createSpan(buffer, className));
+        buffer = '';
+    }
+}
+
+function handleBacktick() {
+    switch (currentState) {
+        case 'normal':
+            flushBuffer();
+            currentState = 'inlineCode';
+            break;
+        case 'inlineCode':
+            flushBuffer('inline-code');
+            currentState = 'normal';
+            break;
+        case 'codeBlock':
+            buffer += '`';
+            codeBlockCount++;
+            if (codeBlockCount === 3) {
+                flushBuffer('code-block');
+                currentState = 'normal';
+                codeBlockCount= 0;
+            }
+            break;
+    }
+}
+
+function handleTripleBackTicks() {
+    switch (currentState) {
+        case 'normal':
+            flushBuffer();
+            currentState = 'codeBlock';
+            codeBlockCount = 0;
+            break;
+        case 'inlineCode':
+            buffer += '``';
+            flushBuffer('inline-code');
+            currentState = 'normal';
+            break;
+        case 'codeBlock':
+            flushBuffer('code-block');
+            currentState = 'normal';
+            codeBlockCount = 0;
+            break;
+    }
+}
+
+
 function addToken(token: string) {
     if(!currentContainer) return;
 
-    const span = document.createElement('span');
-    span.innerText = token;
-    currentContainer.appendChild(span);
+    for (let i = 0; i < token.length; i++) {
+        const char = token[i];
+
+        if (char === '`') {
+            if (i + 2 < token.length && token.slice(i, i + 3) === '```') {
+                handleTripleBackTicks();
+                i += 2;
+            } else {
+                handleBacktick();
+            }
+        } else {
+            buffer += char;
+        }
+    }
+    flushBuffer(currentState === 'inlineCode' ? 'inline-code' : currentState === 'codeBlock' ? 'code-block' : '');
+    // const span = document.createElement('span');
+    // span.innerText = token;
+    // currentContainer.appendChild(span);
 }
